@@ -1,0 +1,46 @@
+---
+- name: Deploy Tomcat in MicroShift cluster
+  hosts: localhost
+  vars:
+    project: "hello-tomcat"
+  tasks:
+
+    - name: Create {{ project }} Namespace
+      kubernetes.core.k8s:
+        kubeconfig: files/kubeconfig
+        state: present
+        definition:
+          apiVersion: v1
+          kind: Namespace
+          metadata:
+            name: "{{ project }}"
+            labels:
+             app: "{{ project }}"
+
+    - name: Create {{ project }} configmap
+      kubernetes.core.k8s:
+        kubeconfig: files/kubeconfig
+        state: present
+        namespace: "{{ project }}"
+        src: files/configmap.yaml
+
+    - name: Create {{ project }} deployment
+      kubernetes.core.k8s:
+        kubeconfig: files/kubeconfig
+        state: present
+        namespace: "{{ project }}"
+        src: files/deployment.yaml
+
+    - name: Create {{ project }} service
+      kubernetes.core.k8s:
+        kubeconfig: files/kubeconfig
+        state: present
+        namespace: "{{ project }}"
+        src: files/service.yaml
+
+    - name: Create {{ project }} route
+      kubernetes.core.k8s:
+        kubeconfig: files/kubeconfig
+        state: present
+        namespace: "{{ project }}"
+        src: files/route.yaml

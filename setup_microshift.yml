@@ -1,0 +1,75 @@
+---
+- name: Setup microshift
+  hosts: microshift
+  remote_user: root
+  tasks:
+
+    - name: Ensure Podman is installed
+      ansible.builtin.dnf:
+        name: podman
+        state: present
+
+    - name: Ensure skopeo is installed
+      ansible.builtin.dnf:
+        name: skopeo
+        state: present
+
+    - name: Ensure OCP repository is enabled
+      redhat.rhel_system_roles.rhsm_repository:
+        name: rhocp-4.17-for-rhel-9-x86_64-rpms
+        state: enabled
+
+    - name: Ensure fast repository is enabled
+      redhat.rhel_system_roles.rhsm_repository:
+        name: fast-datapath-for-rhel-9-x86_64-rpms
+        state: enabled
+
+    - name: Ensure microshift is installed
+      ansible.builtin.dnf:
+        name: microshift
+        state: present
+    
+    - name: Copy pull secret
+      ansible.builtin.copy:
+        src: pull-secret.txt
+        dest: /etc/crio/openshift-pull-secret
+        owner: root
+        group: root
+        mode: '0600'
+
+    - name: configure firewall
+      ansible.posix.firewalld:
+        zone: trusted
+        state: enabled
+        permanent: true
+        source: 10.42.0.0/16
+        immediate: true
+
+    - name: configure firewall
+      ansible.posix.firewalld:
+        zone: trusted
+        state: enabled
+        permanent: true
+        source: 169.254.169.1
+        immediate: true
+
+    - name: Copy registry config
+      ansible.builtin.copy:
+        src: 101-mirror.conf
+        dest: /etc/containers/registries.conf.d/101-mirror.conf
+        owner: root
+        group: root
+        mode: '0644'
+
+    - name: ensure service is enabled and started
+      ansible.builtin.systemd_service:
+        name: microshift
+        enabled: true
+        state: started
+
+    - name: Fetch kubeconfig from remote host
+      ansible.builtin.fetch:
+        src: /var/lib/microshift/resources/kubeadmin/microshift.lan/kubeconfig
+        dest: files/kubeconfig
+        flat: true
+

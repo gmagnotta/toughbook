@@ -1,0 +1,174 @@
+---
+- name: Setup Toughbook
+  hosts: toughbook
+  vars:
+    - registry_username: "{{ lookup('env', 'REGISTRY_USERNAME') }}"
+    - registry_password: "{{ lookup('env', 'REGISTRY_PASSWORD') }}"
+  tasks:
+
+    # - name: debug
+    #   ansible.builtin.debug:
+    #     var: ansible_facts
+
+    - name: Ensure AAP repository is enabled
+      redhat.rhel_system_roles.rhsm_repository:
+        name: ansible-automation-platform-2.5-for-rhel-9-x86_64-rpms
+        state: enabled
+
+    - name: Ensure Ansible Navigator is installed
+      ansible.builtin.dnf:
+        name: ansible-navigator
+        state: present
+
+    - name: Ensure Podman is installed
+      ansible.builtin.dnf:
+        name: podman
+        state: present
+
+    - name: Ensure skopeo is installed
+      ansible.builtin.dnf:
+        name: skopeo
+        state: present
+
+    - name: Check Registry Username exists
+      ansible.builtin.assert:
+        that:
+          - registry_username is defined
+          - registry_username !=""
+        fail_msg: "registry_username doesn't exist, export the registry username and password"
+
+    - name: Podman login to registry.redhat.io
+      become: false
+      ansible.builtin.command: podman login registry.redhat.io -u {{ registry_username }} -p {{ registry_password }}
+      register: podman_login_result
+      changed_when: '"Already logged in" not in podman_login_result'
+
+    - name: Check if Podman login succeeded
+      ansible.builtin.fail:
+        msg: "Podman login failed!"
+      when: podman_login_result.rc != 0
+
+    - name: Pull ansible image
+      become: false
+      ansible.builtin.command: podman pull registry.redhat.io/ansible-automation-platform-25/ee-supported-rhel8
+      changed_when: false
+
+    - name: Ensure OCP repository is enabled
+      redhat.rhel_system_roles.rhsm_repository:
+        name: rhocp-4.17-for-rhel-9-x86_64-rpms
+        state: disabled
+
+    - name: Create src directory if it does not exist
+      ansible.builtin.file:
+        path: /home/giuseppe/src
+        state: directory
+        owner: giuseppe
+        group: giuseppe
+        mode: '0700'
+
+    - name: Create toughbook directory if it does not exist
+      ansible.builtin.file:
+        path: /home/giuseppe/src/toughbook
+        state: directory
+        owner: giuseppe
+        group: giuseppe
+        mode: '0700'
+
+    - name: Retrieve toughbook git repo
+      become: false
+      ansible.builtin.git:
+        repo: 'https://github.com/gmagnotta/toughbook.git'
+        dest: /home/giuseppe/src/toughbook
+
+    # - name: Enable systemd user lingering
+    #   ansible.builtin.command: loginctl enable-linger giuseppe
+
+    # - name: Pull Hello Tomcat
+    #   become: false
+    #   ansible.builtin.command: podman pull quay.io/gmagnotta/hello-tomcat:stable
+
+- name: Setup registry
+  hosts: toughbook
+  vars:
+    podman_create_host_directories: true
+    podman_firewall:
+      - port: 5000/tcp
+        state: enabled
+    podman_kube_specs:
+      - state: started
+        run_as_user: root
+        run_as_group: root
+        kube_file_content:
+          apiVersion: v1
+          kind: Pod
+          metadata:
+            name: registry
+          spec:
+            containers:
+              - name: registry
+                image: docker.io/library/registry
+                ports:
+                  - containerPort: 5000
+                    hostPort: 5000
+                volumeMounts:
+                  - mountPath: /var/lib/registry:Z
+                    name: registry
+            volumes:
+              - name: registry
+                hostPath:
+                  path: /root/registry
+  roles:
+    - redhat.rhel_system_roles.podman
+
+# - name: Enable service
+#   hosts: toughbook
+#   tasks:
+
+#     - name: Enable service
+#       become: false
+#       ansible.builtin.command: systemctl --user enable 'podman-kube@-home-giuseppe-.config-containers-ansible\x2dkubernetes.d-registry.yml.service'
+
+- name: Populate image in repository
+  hosts: toughbook
+  tasks:
+
+    - name: Copy image
+      become: false
+      ansible.builtin.command: skopeo copy --dest-tls-verify=false docker://quay.io/gmagnotta/hello-tomcat:stable docker://{{ ansible_facts.default_ipv4.address }}:5000/hello-tomcat:stable
+
+- name: Copy kube config file
+  hosts: toughbook
+  tasks:
+
+    - name: Create kube directory if it does not exist
+      ansible.builtin.file:
+        path: /home/giuseppe/.kube
+        state: directory
+        owner: giuseppe
+        group: giuseppe
+        mode: '0700'
+
+    - name: Copy kubeconfig config
+      become: false
+      ansible.builtin.copy:
+        src: kubeconfig
+        dest: /home/giuseppe/.kube/config
+        owner: giuseppe
+        group: giuseppe
+        mode: '0600'
+
+    - name: Create local bin directory if it does not exist
+      ansible.builtin.file:
+        path: /home/giuseppe/.local/bin
+        state: directory
+        owner: giuseppe
+        group: giuseppe
+        mode: '0700'
+
+    - name: Unarchive openshift client binary
+      ansible.builtin.unarchive:
+        src: "https://mirror.openshift.com/pub/openshift-v4/x86_64/clients/ocp/latest/openshift-client-linux.tar.gz"
+        dest: "/home/giuseppe/.local/bin"
+        remote_src: yes
+        owner: giuseppe
+        group: giuseppe

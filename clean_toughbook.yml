@@ -1,0 +1,89 @@
+---
+
+# - name: Uninstall registry
+#   hosts: toughbook
+#   vars:
+#     podman_create_host_directories: true
+#     podman_firewall:
+#       - port: 5000/tcp
+#         state: disabled
+#     podman_kube_specs:
+#       - state: absent
+#         run_as_user: root
+#         run_as_group: root
+#         kube_file_content:
+#           apiVersion: v1
+#           kind: Pod
+#           metadata:
+#             name: registry
+#           spec:
+#             containers:
+#               - name: registry
+#                 image: docker.io/library/registry
+#                 ports:
+#                   - containerPort: 5000
+#                     hostPort: 5000
+#                 volumeMounts:
+#                   - mountPath: /var/lib/registry:Z
+#                     name: registry
+#             volumes:
+#               - name: registry
+#                 hostPath:
+#                   path: /root/registry
+#   roles:
+#     - redhat.rhel_system_roles.podman
+
+- name: Clean Toughbook
+  hosts: toughbook
+  tasks:
+
+    - name: Remte local bin directory if it exist
+      ansible.builtin.file:
+        path: /home/giuseppe/.local/bin
+        state: absent
+
+    - name: Clean kube directory
+      ansible.builtin.file:
+        state: absent
+        path: /home/giuseppe/.kube/
+
+    - name: Clean registry directory
+      ansible.builtin.file:
+        state: absent
+        path: /root/registry
+
+    - name: Ensure Ansible Navigator is not present
+      ansible.builtin.dnf:
+        name: ansible-navigator
+        state: absent
+
+    - name: Ensure Ansible Core is not present
+      ansible.builtin.dnf:
+        name: ansible-core
+        state: absent
+
+    - name: Ensure Podman is absent
+      ansible.builtin.dnf:
+        name: podman
+        state: absent
+
+    - name: Ensure skopeo is absent
+      ansible.builtin.dnf:
+        name: skopeo
+        state: absent
+
+    - name: Ensure OCP repository is disabled
+      redhat.rhel_system_roles.rhsm_repository:
+        name: rhocp-4.17-for-rhel-9-x86_64-rpms
+        state: disabled
+
+    - name: Ensure AAP repository is disabled
+      redhat.rhel_system_roles.rhsm_repository:
+        name: ansible-automation-platform-2.5-for-rhel-9-x86_64-rpms
+        state: disabled
+
+    - name: Delete src directory if it exist
+      ansible.builtin.file:
+        path: /home/giuseppe/src
+        state: absent
+
