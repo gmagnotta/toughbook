@@ -13,15 +13,7 @@ to automate the edge configuration
 - Put the ip address of Red Hat Device Edge in inventory file
 - Execute setup_microshift.yaml with ansible
 - Install Red Hat Enteprise Linux on the toughbook
-- Create an user and enable ssh key authentication for the user
-- Allow the user to use sudo without password:
-
-put a file /etc/sudoers.d/<user>
-
-with content:
-
-<user>	ALL=(ALL)	NOPASSWD: ALL
-
+- Allow ssh authentication to the root user with an ssh key
 - Configure inventory with the ip address of the toughbook
 
 ## Simulate the Core Automation

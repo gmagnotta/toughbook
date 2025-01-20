@@ -37,8 +37,15 @@
           - registry_username !=""
         fail_msg: "registry_username doesn't exist, export the registry username and password"
 
+    - name: Create toughbook user
+      ansible.builtin.user:
+        name: toughbook
+        state: present
+        password: $6$885dNlpwWF5gKjLF$eKKXGzG0Dj/bytfKrflQqKd.87bWVTaF80dIt9U6k4V.FM7sZHd9Q/.I4aFTeNAd2z4uLpEnsZhRPHJOeB/MP.
+
     - name: Podman login to registry.redhat.io
-      become: false
+      become: true
+      become_user: toughbook
       ansible.builtin.command: podman login registry.redhat.io -u {{ registry_username }} -p {{ registry_password }}
       register: podman_login_result
       changed_when: '"Already logged in" not in podman_login_result'
@@ -49,7 +56,8 @@
       when: podman_login_result.rc != 0
 
     - name: Pull ansible image
-      become: false
+      become: true
+      become_user: toughbook
       ansible.builtin.command: podman pull registry.redhat.io/ansible-automation-platform-25/ee-supported-rhel8
       changed_when: false
 
@@ -60,31 +68,31 @@
 
     - name: Create src directory if it does not exist
       ansible.builtin.file:
-        path: /home/giuseppe/src
+        path: /home/toughbook/src
         state: directory
-        owner: giuseppe
-        group: giuseppe
+        owner: toughbook
+        group: toughbook
         mode: '0700'
 
     - name: Create toughbook directory if it does not exist
       ansible.builtin.file:
-        path: /home/giuseppe/src/toughbook
+        path: /home/toughbook/src/toughbook
         state: directory
-        owner: giuseppe
-        group: giuseppe
+        owner: toughbook
+        group: toughbook
         mode: '0700'
 
     - name: Retrieve toughbook git repo
-      become: false
+      become: true
+      become_user: toughbook
       ansible.builtin.git:
         repo: 'https://github.com/gmagnotta/toughbook.git'
-        dest: /home/giuseppe/src/toughbook
+        dest: /home/toughbook/src/toughbook
 
     # - name: Enable systemd user lingering
     #   ansible.builtin.command: loginctl enable-linger giuseppe
 
     # - name: Pull Hello Tomcat
-    #   become: false
     #   ansible.builtin.command: podman pull quay.io/gmagnotta/hello-tomcat:stable
 
 - name: Setup registry
@@ -125,7 +133,6 @@
 #   tasks:
 
 #     - name: Enable service
-#       become: false
 #       ansible.builtin.command: systemctl --user enable 'podman-kube@-home-giuseppe-.config-containers-ansible\x2dkubernetes.d-registry.yml.service'
 
 - name: Populate image in repository
@@ -133,7 +140,6 @@
   tasks:
 
     - name: Copy image
-      become: false
       ansible.builtin.command: skopeo copy --dest-tls-verify=false docker://quay.io/gmagnotta/hello-tomcat:stable docker://{{ ansible_facts.default_ipv4.address }}:5000/hello-tomcat:stable
 
 - name: Copy kube config file
@@ -142,33 +148,32 @@
 
     - name: Create kube directory if it does not exist
       ansible.builtin.file:
-        path: /home/giuseppe/.kube
+        path: /home/toughbook/.kube
         state: directory
-        owner: giuseppe
-        group: giuseppe
+        owner: toughbook
+        group: toughbook
         mode: '0700'
 
     - name: Copy kubeconfig config
-      become: false
       ansible.builtin.copy:
         src: kubeconfig
-        dest: /home/giuseppe/.kube/config
-        owner: giuseppe
-        group: giuseppe
+        dest: /home/toughbook/.kube/config
+        owner: toughbook
+        group: toughbook
         mode: '0600'
 
     - name: Create local bin directory if it does not exist
       ansible.builtin.file:
-        path: /home/giuseppe/.local/bin
+        path: /home/toughbook/.local/bin
         state: directory
-        owner: giuseppe
-        group: giuseppe
+        owner: toughbook
+        group: toughbook
         mode: '0700'
 
     - name: Unarchive openshift client binary
       ansible.builtin.unarchive:
         src: "https://mirror.openshift.com/pub/openshift-v4/x86_64/clients/ocp/latest/openshift-client-linux.tar.gz"
-        dest: "/home/giuseppe/.local/bin"
+        dest: "/home/toughbook/.local/bin"
         remote_src: yes
-        owner: giuseppe
-        group: giuseppe
+        owner: toughbook
+        group: toughbook
