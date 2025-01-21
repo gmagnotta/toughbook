@@ -1,0 +1,161 @@
+---
+- name: Setup Toughbook
+  hosts: toughbook
+  vars:
+    - registry_username: "{{ lookup('env', 'REGISTRY_USERNAME') }}"
+    - registry_password: "{{ lookup('env', 'REGISTRY_PASSWORD') }}"
+    - mirror_password: "mysecurepassword"
+  tasks:
+
+    # - name: debug
+    #   ansible.builtin.debug:
+    #     var: ansible_facts
+
+    - name: Ensure AAP repository is enabled
+      redhat.rhel_system_roles.rhsm_repository:
+        name: ansible-automation-platform-2.5-for-rhel-9-x86_64-rpms
+        state: enabled
+
+    - name: Ensure Ansible Navigator is installed
+      ansible.builtin.dnf:
+        name: ansible-navigator
+        state: present
+
+    - name: Ensure Podman is installed
+      ansible.builtin.dnf:
+        name: podman
+        state: present
+
+    - name: Ensure skopeo is installed
+      ansible.builtin.dnf:
+        name: skopeo
+        state: present
+
+    - name: Check Registry Username exists
+      ansible.builtin.assert:
+        that:
+          - registry_username is defined
+          - registry_username !=""
+        fail_msg: "registry_username doesn't exist, export the registry username and password"
+
+    - name: Create toughbook user
+      ansible.builtin.user:
+        name: toughbook
+        state: present
+        password: $6$885dNlpwWF5gKjLF$eKKXGzG0Dj/bytfKrflQqKd.87bWVTaF80dIt9U6k4V.FM7sZHd9Q/.I4aFTeNAd2z4uLpEnsZhRPHJOeB/MP.
+
+    - name: Podman login to registry.redhat.io
+      become: true
+      become_user: toughbook
+      ansible.builtin.command: podman login registry.redhat.io -u {{ registry_username }} -p {{ registry_password }}
+      register: podman_login_result
+      changed_when: '"Already logged in" not in podman_login_result'
+
+    - name: Check if Podman login succeeded
+      ansible.builtin.fail:
+        msg: "Podman login failed!"
+      when: podman_login_result.rc != 0
+
+    - name: Pull ansible image
+      become: true
+      become_user: toughbook
+      ansible.builtin.command: podman pull registry.redhat.io/ansible-automation-platform-25/ee-supported-rhel8
+      changed_when: false
+
+    - name: Ensure OCP repository is enabled
+      redhat.rhel_system_roles.rhsm_repository:
+        name: rhocp-4.17-for-rhel-9-x86_64-rpms
+        state: disabled
+
+    - name: Create src directory if it does not exist
+      ansible.builtin.file:
+        path: /home/toughbook/src
+        state: directory
+        owner: toughbook
+        group: toughbook
+        mode: '0700'
+
+    - name: Create toughbook directory if it does not exist
+      ansible.builtin.file:
+        path: /home/toughbook/src/toughbook
+        state: directory
+        owner: toughbook
+        group: toughbook
+        mode: '0700'
+
+    - name: Retrieve toughbook git repo
+      become: true
+      become_user: toughbook
+      ansible.builtin.git:
+        repo: 'https://github.com/gmagnotta/toughbook.git'
+        dest: /home/toughbook/src/toughbook
+
+    - name: Create mirror-registry directory
+      ansible.builtin.file:
+        path: /root/mirror-registry
+        state: directory
+        owner: root
+        group: root
+        mode: '0700'
+
+    - name: Copy mirror-registry
+      ansible.builtin.unarchive:
+        src: mirror-registry-amd64.tar.gz
+        dest: /root/mirror-registry
+
+    - name: Setup oc-mirror
+      ansible.builtin.command: /root/mirror-registry/mirror-registry install --quayHostname toughbook.lan --quayRoot /root/mirrordata --initPassword {{ mirror_password }}
+
+    - name: Podman login to oc-mirror
+      ansible.builtin.command: podman login --tls-verify=false -u init -p {{ mirror_password }} {{ ansible_facts.default_ipv4.address }}:8443
+      register: podman_login_result
+      changed_when: '"Already logged in" not in podman_login_result'
+
+    - name: Check if Podman login succeeded
+      ansible.builtin.fail:
+        msg: "Podman login failed!"
+      when: podman_login_result.rc != 0
+
+
+- name: Populate image in repository
+  hosts: toughbook
+  tasks:
+
+    - name: Copy image
+      ansible.builtin.command: skopeo copy --dest-tls-verify=false docker://quay.io/gmagnotta/hello-tomcat:stable docker://{{ ansible_facts.default_ipv4.address }}:8443/gmagnotta/hello-tomcat:stable
+
+- name: Copy kube config file
+  hosts: toughbook
+  tasks:
+
+    - name: Create kube directory if it does not exist
+      ansible.builtin.file:
+        path: /home/toughbook/.kube
+        state: directory
+        owner: toughbook
+        group: toughbook
+        mode: '0700'
+
+    - name: Copy kubeconfig config
+      ansible.builtin.copy:
+        src: kubeconfig
+        dest: /home/toughbook/.kube/config
+        owner: toughbook
+        group: toughbook
+        mode: '0600'
+
+    - name: Create local bin directory if it does not exist
+      ansible.builtin.file:
+        path: /home/toughbook/.local/bin
+        state: directory
+        owner: toughbook
+        group: toughbook
+        mode: '0700'
+
+    - name: Unarchive openshift client binary
+      ansible.builtin.unarchive:
+        src: "https://mirror.openshift.com/pub/openshift-v4/x86_64/clients/ocp/latest/openshift-client-linux.tar.gz"
+        dest: "/home/toughbook/.local/bin"
+        remote_src: yes
+        owner: toughbook
+        group: toughbook
