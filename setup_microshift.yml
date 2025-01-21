@@ -1,8 +1,11 @@
 ---
 - name: Setup microshift
   hosts: microshift
-  remote_user: root
   tasks:
+
+    # - name: debug
+    #   ansible.builtin.debug:
+    #     var: ansible_facts
 
     - name: Ensure Podman is installed
       ansible.builtin.dnf:
@@ -24,11 +27,16 @@
         name: fast-datapath-for-rhel-9-x86_64-rpms
         state: enabled
 
+    - name: Ensure gitops repository is enabled
+      redhat.rhel_system_roles.rhsm_repository:
+        name: gitops-1.12-for-rhel-9-x86_64-rpms
+        state: enabled
+
     - name: Ensure microshift is installed
       ansible.builtin.dnf:
         name: microshift
         state: present
-    
+
     - name: Copy pull secret
       ansible.builtin.copy:
         src: pull-secret.txt
@@ -37,7 +45,7 @@
         group: root
         mode: '0600'
 
-    - name: configure firewall
+    - name: Configure firewall
       ansible.posix.firewalld:
         zone: trusted
         state: enabled
@@ -45,12 +53,20 @@
         source: 10.42.0.0/16
         immediate: true
 
-    - name: configure firewall
+    - name: Configure firewall
       ansible.posix.firewalld:
         zone: trusted
         state: enabled
         permanent: true
         source: 169.254.169.1
+        immediate: true
+
+    - name: Configure firewall
+      ansible.posix.firewalld:
+        zone: public
+        state: enabled
+        permanent: true
+        port: 6443/tcp
         immediate: true
 
     - name: Copy registry config
@@ -61,15 +77,36 @@
         group: root
         mode: '0644'
 
-    - name: ensure service is enabled and started
+    - name: Ensure service is enabled and started
       ansible.builtin.systemd_service:
         name: microshift
         enabled: true
         state: started
+    
+    - name: Create kube directory if it does not exist
+      ansible.builtin.file:
+        path: /root/.kube
+        state: directory
+        owner: root
+        group: root
+        mode: '0700'
+
+    - name: Ensure microshift-gitops is installed
+      ansible.builtin.dnf:
+        name: microshift-gitops
+        state: present
+
+    - name: Restart microshift
+      ansible.builtin.systemd_service:
+        name: microshift
+        state: restarted
+
+    - name: Fetch kubeconfig
+      ansible.builtin.command: cp /var/lib/microshift/resources/kubeadmin/kubeconfig /root/.kube/config
 
     - name: Fetch kubeconfig from remote host
       ansible.builtin.fetch:
-        src: /var/lib/microshift/resources/kubeadmin/microshift.lan/kubeconfig
+        src: /var/lib/microshift/resources/kubeadmin/{{ ansible_facts.nodename }}/kubeconfig
         dest: files/kubeconfig
         flat: true
 
