@@ -5,9 +5,20 @@
     project: "hello-tomcat"
   tasks:
 
+    - name: Create ~/.kube
+      ansible.builtin.file:
+        path: ~/.kube
+        state: directory
+        mode: '0700'
+
+    - name: Copy kubeconfig
+      ansible.builtin.copy:
+        src: kubeconfig
+        dest: ~/.kube/config
+        mode: '0644'
+
     - name: Create {{ project }} Namespace
       kubernetes.core.k8s:
-        kubeconfig: files/kubeconfig
         state: present
         definition:
           apiVersion: v1
@@ -17,30 +28,8 @@
             labels:
              app: "{{ project }}"
 
-    - name: Create {{ project }} configmap
+    - name: Deploy resources
       kubernetes.core.k8s:
-        kubeconfig: files/kubeconfig
-        state: present
         namespace: "{{ project }}"
-        src: files/configmap.yaml
-
-    - name: Create {{ project }} deployment
-      kubernetes.core.k8s:
-        kubeconfig: files/kubeconfig
-        state: present
-        namespace: "{{ project }}"
-        src: files/deployment.yaml
-
-    - name: Create {{ project }} service
-      kubernetes.core.k8s:
-        kubeconfig: files/kubeconfig
-        state: present
-        namespace: "{{ project }}"
-        src: files/service.yaml
-
-    - name: Create {{ project }} route
-      kubernetes.core.k8s:
-        kubeconfig: files/kubeconfig
-        state: present
-        namespace: "{{ project }}"
-        src: files/route.yaml
+        definition: "{{ lookup('kubernetes.core.kustomize', dir='files/k8s/overlays/prod/') }}"
+      register: oc_apply_result
