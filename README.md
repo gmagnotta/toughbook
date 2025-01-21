@@ -15,6 +15,7 @@ to automate the edge configuration
 - Install Red Hat Enteprise Linux on the toughbook
 - Allow ssh authentication to the root user with an ssh key
 - Configure inventory with the ip address of the toughbook
+- If you want to use the playbook that install quay, you need to download the file mirror-registry-amd64.tar.gz from OCP dashboard and put it in files/
 
 ## Simulate the Core Automation
 - Execute setup_toughbook.yml to configure the toughbook
