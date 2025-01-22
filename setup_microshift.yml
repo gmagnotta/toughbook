@@ -7,16 +7,6 @@
     #   ansible.builtin.debug:
     #     var: ansible_facts
 
-    - name: Ensure Podman is installed
-      ansible.builtin.dnf:
-        name: podman
-        state: present
-
-    - name: Ensure skopeo is installed
-      ansible.builtin.dnf:
-        name: skopeo
-        state: present
-
     - name: Ensure OCP repository is enabled
       redhat.rhel_system_roles.rhsm_repository:
         name: rhocp-4.17-for-rhel-9-x86_64-rpms
@@ -31,6 +21,16 @@
       redhat.rhel_system_roles.rhsm_repository:
         name: gitops-1.12-for-rhel-9-x86_64-rpms
         state: enabled
+    
+    - name: Ensure Podman is installed
+      ansible.builtin.dnf:
+        name: podman
+        state: present
+
+    - name: Ensure skopeo is installed
+      ansible.builtin.dnf:
+        name: skopeo
+        state: present
 
     - name: Ensure microshift is installed
       ansible.builtin.dnf:
@@ -83,6 +83,13 @@
         enabled: true
         state: started
     
+    - name: Ensure microshift-gitops is installed
+      ansible.builtin.dnf:
+        name: microshift-gitops
+        state: present
+      notify:
+        - Restart microshift
+    
     - name: Create kube directory if it does not exist
       ansible.builtin.file:
         path: /root/.kube
@@ -91,22 +98,24 @@
         group: root
         mode: '0700'
 
-    - name: Ensure microshift-gitops is installed
-      ansible.builtin.dnf:
-        name: microshift-gitops
-        state: present
-
-    - name: Restart microshift
-      ansible.builtin.systemd_service:
-        name: microshift
-        state: restarted
-
     - name: Fetch kubeconfig
-      ansible.builtin.command: cp /var/lib/microshift/resources/kubeadmin/kubeconfig /root/.kube/config
+      ansible.builtin.copy:
+        remote_src: true
+        src: /var/lib/microshift/resources/kubeadmin/kubeconfig
+        dest: /root/.kube/config
+        owner: root
+        group: root
+        mode: '0600'
 
     - name: Fetch kubeconfig from remote host
       ansible.builtin.fetch:
         src: /var/lib/microshift/resources/kubeadmin/{{ ansible_facts.nodename }}/kubeconfig
         dest: files/kubeconfig
         flat: true
-
+  
+  handlers:
+  
+    - name: Restart microshift
+      ansible.builtin.systemd_service:
+        name: microshift
+        state: restarted
