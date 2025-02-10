@@ -62,20 +62,20 @@
         name: ansible-core
         state: absent
 
-    - name: Ensure Podman is absent
-      ansible.builtin.dnf:
-        name: podman
-        state: absent
+    # - name: Ensure Podman is absent
+    #   ansible.builtin.dnf:
+    #     name: podman
+    #     state: absent
 
-    - name: Ensure skopeo is absent
-      ansible.builtin.dnf:
-        name: skopeo
-        state: absent
+    # - name: Ensure skopeo is absent
+    #   ansible.builtin.dnf:
+    #     name: skopeo
+    #     state: absent
 
-    - name: Ensure OCP repository is disabled
-      redhat.rhel_system_roles.rhsm_repository:
-        name: rhocp-4.17-for-rhel-9-x86_64-rpms
-        state: disabled
+    # - name: Ensure OCP repository is disabled
+    #   redhat.rhel_system_roles.rhsm_repository:
+    #     name: rhocp-4.17-for-rhel-9-x86_64-rpms
+    #     state: disabled
 
     - name: Ensure AAP repository is disabled
       redhat.rhel_system_roles.rhsm_repository:
@@ -93,4 +93,8 @@
         state: absent
         remove: true
 
+    - name: Delete /tmp/storage-run-1001 directory if it exist
+      ansible.builtin.file:
+        path: /tmp/storage-run-1001
+        state: absent
 

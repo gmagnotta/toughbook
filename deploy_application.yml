@@ -17,16 +17,18 @@
         dest: ~/.kube/config
         mode: '0644'
 
-    - name: Create {{ project }} Namespace
-      kubernetes.core.k8s:
-        state: present
-        definition:
-          apiVersion: v1
-          kind: Namespace
-          metadata:
-            name: "{{ project }}"
-            labels:
-             app: "{{ project }}"
+- name: Create Project
+  hosts: localhost
+  vars_files:
+    - variables.yml
+  roles:
+    - gmagnotta.ocp.project
+
+- name: Deploy application
+  hosts: localhost
+  vars_files:
+    - variables.yml
+  tasks:
 
     - name: Deploy resources
       kubernetes.core.k8s:

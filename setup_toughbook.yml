@@ -6,28 +6,22 @@
     - registry_password: "{{ lookup('env', 'REGISTRY_PASSWORD') }}"
   tasks:
 
-    # - name: debug
-    #   ansible.builtin.debug:
-    #     var: ansible_facts
+    - name: Show ansible facts
+      ansible.builtin.debug:
+        var: ansible_facts
+        verbosity: 1
 
     - name: Ensure AAP repository is enabled
       redhat.rhel_system_roles.rhsm_repository:
         name: ansible-automation-platform-2.5-for-rhel-9-x86_64-rpms
         state: enabled
 
-    - name: Ensure Ansible Navigator is installed
+    - name: Ensure Required Applications are installed
       ansible.builtin.dnf:
-        name: ansible-navigator
-        state: present
-
-    - name: Ensure Podman is installed
-      ansible.builtin.dnf:
-        name: podman
-        state: present
-
-    - name: Ensure skopeo is installed
-      ansible.builtin.dnf:
-        name: skopeo
+        name:
+          - ansible-navigator
+          - podman
+          - skopeo
         state: present
 
     - name: Check Registry Username exists
@@ -61,11 +55,6 @@
       ansible.builtin.command: podman pull registry.redhat.io/ansible-automation-platform-25/ee-supported-rhel8
       changed_when: false
 
-    - name: Ensure OCP repository is enabled
-      redhat.rhel_system_roles.rhsm_repository:
-        name: rhocp-4.17-for-rhel-9-x86_64-rpms
-        state: disabled
-
     - name: Create src directory if it does not exist
       ansible.builtin.file:
         path: /home/toughbook/src
@@ -88,12 +77,6 @@
       ansible.builtin.git:
         repo: 'https://github.com/gmagnotta/toughbook.git'
         dest: /home/toughbook/src/toughbook
-
-    # - name: Enable systemd user lingering
-    #   ansible.builtin.command: loginctl enable-linger giuseppe
-
-    # - name: Pull Hello Tomcat
-    #   ansible.builtin.command: podman pull quay.io/gmagnotta/hello-tomcat:stable
 
 - name: Setup registry
   hosts: toughbook
@@ -128,19 +111,12 @@
   roles:
     - redhat.rhel_system_roles.podman
 
-# - name: Enable service
-#   hosts: toughbook
-#   tasks:
-
-#     - name: Enable service
-#       ansible.builtin.command: systemctl --user enable 'podman-kube@-home-giuseppe-.config-containers-ansible\x2dkubernetes.d-registry.yml.service'
-
 - name: Populate image in repository
   hosts: toughbook
   tasks:
 
     - name: Copy image
-      ansible.builtin.command: skopeo copy --dest-tls-verify=false docker://quay.io/gmagnotta/hello-tomcat:stable docker://{{ ansible_facts.default_ipv4.address }}:5000/hello-tomcat:stable
+      ansible.builtin.command: skopeo copy --dest-tls-verify=false docker://quay.io/gmagnotta/hello-tomcat:stable docker://{{ ansible_facts.default_ipv4.address }}:5000/gmagnotta/hello-tomcat:stable
 
 - name: Copy kube config file
   hosts: toughbook

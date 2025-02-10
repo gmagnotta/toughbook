@@ -1,0 +1,6 @@
+project: "hello-tomcat"
+registries:
+  - name: redhatio
+    hostname: registry.redhat.io
+    username: "yourusername"
+    password: "yourpassword"

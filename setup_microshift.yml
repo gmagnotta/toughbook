@@ -3,9 +3,10 @@
   hosts: microshift
   tasks:
 
-    # - name: debug
-    #   ansible.builtin.debug:
-    #     var: ansible_facts
+    - name: Show ansible facts
+      ansible.builtin.debug:
+        var: ansible_facts
+        verbosity: 1
 
     - name: Ensure OCP repository is enabled
       redhat.rhel_system_roles.rhsm_repository:
