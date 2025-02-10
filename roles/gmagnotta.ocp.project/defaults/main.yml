@@ -1,0 +1,5 @@
+---
+project: "myproject"
+registries: []
+create_builder_secret: false
+create_operator_group: false

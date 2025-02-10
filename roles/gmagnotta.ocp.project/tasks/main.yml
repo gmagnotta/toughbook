@@ -1,0 +1,93 @@
+---
+- name: Check registries values
+  ansible.builtin.assert:
+    that:
+      - item['name'] is defined
+      - item['name'] != ""
+      - item['hostname'] is defined
+      - item['hostname'] != ""
+      - item['username'] is defined
+      - item['username'] != ""
+      - item['password'] is defined
+      - item['password'] != ""
+    fail_msg: "registries values not valid"
+    quiet: true
+  loop: "{{ registries }}"
+  loop_control:
+    label: "{{ item.name }}"
+
+- name: Check project value
+  ansible.builtin.assert:
+    that:
+      - project is defined
+      - project != ""
+    fail_msg: "project not valid"
+    quiet: true
+
+- name: Create {{ project }} Namespace
+  kubernetes.core.k8s:
+    state: present
+    definition:
+      apiVersion: v1
+      kind: Namespace
+      metadata:
+        name: "{{ project }}"
+        labels:
+          app: "{{ project }}"
+
+- name: Create Registry {{ item['name'] }} Secret
+  kubernetes.core.k8s:
+    state: present
+    template: secret.j2
+  loop: "{{ registries }}"
+  loop_control:
+    label: "{{ item.name }}"
+
+- name: Read default ServiceAccount
+  kubernetes.core.k8s_info:
+    kind: ServiceAccount
+    name: default
+    namespace: "{{ project }}"
+  register: default_service_account
+  changed_when: false
+
+- name: Link default secret
+  ansible.builtin.command: oc secrets link default {{ item['name'] }} --for=pull -n {{ project }}
+  when:
+    - default_service_account.resources[0] is not search(item['name'])
+  loop: "{{ registries }}"
+  loop_control:
+    label: "{{ item.name }}"
+
+- name: Read builder ServiceAccount
+  kubernetes.core.k8s_info:
+    kind: ServiceAccount
+    name: builder
+    namespace: "{{ project }}"
+  register: builder_service_account
+  changed_when: false
+  when: create_builder_secret
+
+- name: Link builder secret
+  ansible.builtin.command: oc secrets link builder {{ item['name'] }} --for=pull,mount -n {{ project }}
+  when: 
+    - create_builder_secret
+    - builder_service_account.resources[0] is not search(item['name'])
+  loop: "{{ registries }}"
+  loop_control:
+    label: "{{ item.name }}"
+
+- name: Create OperatorGroup
+  kubernetes.core.k8s:
+    state: present
+    definition:
+      apiVersion: operators.coreos.com/v1
+      kind: OperatorGroup
+      metadata:
+        name: "{{ project }}"
+        namespace: "{{ project }}"
+      spec:
+        targetNamespaces:
+          - "{{ project }}"
+        upgradeStrategy: Default
+  when: create_operator_group
